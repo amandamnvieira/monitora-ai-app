@@ -23,11 +23,11 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
 
 html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
-.stApp { background: #0f172a; color: #f1f5f9; }
+.stApp { background: #f8fafc; color: #0f172a; }
 
 .card {
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.08);
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
     border-radius: 14px;
     padding: 20px 24px;
     margin-bottom: 12px;
@@ -35,8 +35,8 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
     transition: all 0.2s;
 }
 .card:hover {
-    background: rgba(255,255,255,0.06);
-    border-color: rgba(99,102,241,0.4);
+    background: #f1f5f9;
+    border-color: #6366f1;
 }
 .tag-badge {
     display: inline-block;
@@ -45,58 +45,58 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
     font-size: 11px;
     font-weight: 500;
 }
-.nota-alta  { color: #4ade80; }
-.nota-media { color: #fbbf24; }
-.nota-baixa { color: #f87171; }
+.nota-alta  { color: #16a34a; }
+.nota-media { color: #d97706; }
+.nota-baixa { color: #dc2626; }
 .resumo-ia {
-    background: rgba(99,102,241,0.08);
-    border: 1px solid rgba(99,102,241,0.2);
+    background: #eef2ff;
+    border: 1px solid #c7d2fe;
     border-radius: 12px;
     padding: 14px 16px;
     margin-bottom: 16px;
-    color: #c7d2fe;
+    color: #4338ca;
     font-size: 13px;
     line-height: 1.6;
 }
 .msg-agente {
-    background: rgba(99,102,241,0.2);
-    border: 1px solid rgba(99,102,241,0.3);
+    background: #eef2ff;
+    border: 1px solid #c7d2fe;
     border-radius: 14px 4px 14px 14px;
     padding: 10px 14px;
     margin: 4px 0 4px 60px;
-    color: #c7d2fe;
+    color: #3730a3;
     font-size: 13px;
     line-height: 1.6;
 }
 .msg-cliente {
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.08);
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
     border-radius: 4px 14px 14px 14px;
     padding: 10px 14px;
     margin: 4px 60px 4px 0;
-    color: #e2e8f0;
+    color: #334155;
     font-size: 13px;
     line-height: 1.6;
 }
 .msg-interno {
-    background: rgba(245,158,11,0.08);
-    border: 1px solid rgba(245,158,11,0.2);
+    background: #fffbeb;
+    border: 1px solid #fde68a;
     border-radius: 8px;
     padding: 8px 12px;
     margin: 4px 0;
-    color: #fcd34d;
+    color: #92400e;
     font-size: 12px;
     font-family: 'DM Mono', monospace;
 }
 .msg-autor {
     font-size: 10px;
-    color: #475569;
+    color: #94a3b8;
     margin-bottom: 3px;
     font-family: 'DM Mono', monospace;
 }
 .criterio-card {
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.08);
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
     border-radius: 12px;
     padding: 16px 18px;
     margin-bottom: 12px;
@@ -116,17 +116,18 @@ div[data-testid="stHorizontalBlock"] { gap: 8px; }
     font-family: 'DM Sans', sans-serif !important;
 }
 .stTextArea>div>div>textarea {
-    background: rgba(255,255,255,0.04) !important;
-    border: 1px solid rgba(255,255,255,0.1) !important;
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
     border-radius: 10px !important;
-    color: #e2e8f0 !important;
+    color: #0f172a !important;
     font-family: 'DM Sans', sans-serif !important;
 }
 .stSelectbox>div>div {
-    background: rgba(255,255,255,0.04) !important;
-    border: 1px solid rgba(255,255,255,0.1) !important;
-    color: #e2e8f0 !important;
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    color: #0f172a !important;
 }
+hr { border-color: #e2e8f0 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -147,7 +148,7 @@ def buscar_pendentes():
     query = f"""
         SELECT
             ticket_id, tag, agente_id, nota_ia, nota_revisada,
-            motivo_selecao, status_revisao, ts_abertura,
+            motivo_selecao, status_revisao, ts_abertura, ts_expiracao,
             resumo_avaliacao, criterios_json, conversa_formatada,
             eliminatorio_acionado, motivo_eliminatorio,
             tipo_endosso, perfil_segurado, tipo_cobertura,
@@ -155,7 +156,7 @@ def buscar_pendentes():
             tipo_situacao_cobranca, tipo_reembolso
         FROM {TABELA}
         WHERE status_revisao = 'pendente'
-        ORDER BY created_at DESC
+        ORDER BY ts_expiracao ASC NULLS LAST
         LIMIT 100
     """
     return client.query(query).to_dataframe()
@@ -198,11 +199,20 @@ def nota_cor(nota):
 
 
 def calcular_nota(criterios):
+    FATOR_MAP = {3: 0, 2: 0.1, 1: 0.5, 0: 1.0}
+    NOTA_STR_MAP = {"N3": 3, "N2": 2, "N1": 1, "N0": 0, "ELIMINATÓRIO": 0}
     total = 0
     for c in criterios:
-        nota = c.get("nota", 3)
+        nota_raw = c.get("nota", c.get("avaliacao", 3))
         peso = c.get("peso", 0)
-        fator = {3: 0, 2: 0.1, 1: 0.5, 0: 1.0}.get(int(nota), 0)
+        if isinstance(nota_raw, str):
+            nota = NOTA_STR_MAP.get(nota_raw, 3)
+        else:
+            try:
+                nota = int(nota_raw)
+            except (ValueError, TypeError):
+                nota = 3
+        fator = FATOR_MAP.get(nota, 0)
         total += peso * fator
     return max(0, round(100 - total))
 
@@ -219,6 +229,25 @@ def tag_cor(tag):
 
 def motivo_label(motivo):
     return {"nota_baixa": "🔴 Nota baixa", "nota_alta": "🟢 Nota alta", "amostra_aleatoria": "🔵 Amostra"}.get(motivo, motivo)
+
+
+def expiracao_label(ts_expiracao):
+    if ts_expiracao is None or str(ts_expiracao) == "NaT":
+        return None, None
+    from datetime import timezone
+    agora = datetime.now(timezone.utc)
+    if hasattr(ts_expiracao, 'tzinfo') and ts_expiracao.tzinfo is None:
+        ts_expiracao = ts_expiracao.replace(tzinfo=timezone.utc)
+    dias = (ts_expiracao - agora).days
+    if dias < 0:
+        return "Expirado", "#f87171"
+    if dias == 0:
+        return "Expira hoje", "#f87171"
+    if dias == 1:
+        return "Expira amanhã", "#fbbf24"
+    if dias <= 3:
+        return f"Expira em {dias} dias", "#fbbf24"
+    return f"Expira em {dias} dias", "#4ade80"
 
 
 def renderizar_conversa(texto):
@@ -295,7 +324,7 @@ if st.session_state.tela == "fila":
         <div style="display:flex; align-items:center; gap:12px; padding:8px 0 24px">
             <div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:20px">🔍</div>
             <div>
-                <div style="color:#f1f5f9;font-size:18px;font-weight:600">MonitoraAI</div>
+                <div style="color:#0f172a;font-size:18px;font-weight:600">MonitoraAI</div>
                 <div style="color:#64748b;font-size:12px">Fila de revisões pendentes</div>
             </div>
         </div>
@@ -342,7 +371,7 @@ if st.session_state.tela == "fila":
     st.markdown(f"<p style='color:#64748b; font-size:13px; margin:8px 0 16px'>{len(df_filtrado)} avaliação(ões) encontrada(s)</p>", unsafe_allow_html=True)
 
     # Lista
-    for _, row in df_filtrado.iterrows():
+    for idx, (_, row) in enumerate(df_filtrado.iterrows()):
         nota = int(row.get("nota_ia", 0) or 0)
         cor_classe = nota_cor(nota)
         tag = row.get("tag", "")
@@ -350,6 +379,9 @@ if st.session_state.tela == "fila":
         ticket_id = str(row.get("ticket_id", ""))
         agente = str(row.get("agente_id", ""))
         ts = str(row.get("ts_abertura", ""))[:10]
+        ts_exp = row.get("ts_expiracao")
+        exp_label, exp_color = expiracao_label(ts_exp)
+        exp_badge = f'<span style="background:{exp_color}22; color:{exp_color}; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:500">{exp_label}</span>' if exp_label else ''
 
         col_nota, col_info, col_btn = st.columns([1, 6, 1.5])
         with col_nota:
@@ -366,23 +398,24 @@ if st.session_state.tela == "fila":
                     <span style="font-family:'DM Mono',monospace; font-size:13px; color:#94a3b8">#{ticket_id}</span>
                     <span style="background:{tag_cor(tag)}22; color:{tag_cor(tag)}; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:500">{tag.replace("_"," ")}</span>
                     <span style="font-size:12px; color:#64748b">{motivo_label(motivo)}</span>
+                    {exp_badge}
                 </div>
                 <div style="font-size:12px; color:#64748b">
-                    Agente: <span style="color:#94a3b8; font-family:'DM Mono',monospace">{agente}</span>
+                    Agente: <span style="color:#6366f1; font-family:'DM Mono',monospace">{agente}</span>
                     &nbsp;&nbsp;·&nbsp;&nbsp;Abertura: {ts}
                 </div>
             </div>
             """, unsafe_allow_html=True)
         with col_btn:
             st.markdown("<div style='padding-top:14px'>", unsafe_allow_html=True)
-            if st.button("Revisar →", key=f"btn_{ticket_id}"):
+            if st.button("Revisar →", key=f"btn_{ticket_id}_{idx}"):
                 st.session_state.avaliacao_atual = row.to_dict()
                 st.session_state.criterios_edit = parse_json(row.get("criterios_json", "[]"), [])
                 st.session_state.tela = "revisao"
                 st.rerun()
             st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown("<hr style='border:none;border-top:1px solid rgba(255,255,255,0.05);margin:4px 0'>", unsafe_allow_html=True)
+        st.markdown("<hr style='border:none;border-top:1px solid #e2e8f0;margin:4px 0'>", unsafe_allow_html=True)
 
 
 # ─── TELA REVISÃO ─────────────────────────────────────────────────────────────
@@ -430,7 +463,7 @@ elif st.session_state.tela == "revisao":
     with col_salvar:
         revisado_por = st.text_input("Seu nome", placeholder="Ex: Ana Lima", label_visibility="collapsed", key="revisado_por")
 
-    st.markdown("<hr style='border:none;border-top:1px solid rgba(255,255,255,0.08);margin:8px 0 20px'>", unsafe_allow_html=True)
+    st.markdown("<hr style='border:none;border-top:1px solid #e2e8f0;margin:8px 0 20px'>", unsafe_allow_html=True)
 
     # Duas colunas
     col_conv, col_aval = st.columns([1, 1], gap="large")
@@ -508,7 +541,7 @@ elif st.session_state.tela == "revisao":
 
         # Nota final resumo
         st.markdown(f"""
-        <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:16px 20px; display:flex; align-items:center; justify-content:space-between; margin:16px 0">
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:16px 20px; display:flex; align-items:center; justify-content:space-between; margin:16px 0">
             <div>
                 <div style="font-size:12px; color:#64748b; margin-bottom:4px">Nota revisada calculada</div>
                 <div style="font-size:11px; color:#475569">100 − Σ(peso × fator_nota)</div>
@@ -523,19 +556,30 @@ elif st.session_state.tela == "revisao":
             if not nome_revisor.strip():
                 st.warning("Preencha seu nome antes de salvar.")
             else:
-                with st.spinner("Salvando..."):
-                    try:
-                        salvar_revisao(
-                            ticket_id=ticket_id,
-                            nota_revisada=nota_revisada_final,
-                            criterios_revisados=criterios,
-                            observacao=observacao,
-                            revisado_por=nome_revisor.strip(),
-                        )
-                        st.success("Revisão salva com sucesso!")
-                        import time; time.sleep(1.5)
-                        st.session_state.tela = "fila"
-                        st.session_state.avaliacao_atual = None
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Erro ao salvar: {e}")
+                criterios_sem_justificativa = [
+                    c.get("criterio_nome", c.get("nome", f"Critério {i+1}"))
+                    for i, c in enumerate(criterios)
+                    if not str(c.get("justificativa", "")).strip()
+                ]
+                if criterios_sem_justificativa:
+                    st.warning(
+                        "Preencha a justificativa dos seguintes critérios antes de salvar:\n\n"
+                        + "\n".join(f"• {nome}" for nome in criterios_sem_justificativa)
+                    )
+                else:
+                    with st.spinner("Salvando..."):
+                        try:
+                            salvar_revisao(
+                                ticket_id=ticket_id,
+                                nota_revisada=nota_revisada_final,
+                                criterios_revisados=criterios,
+                                observacao=observacao,
+                                revisado_por=nome_revisor.strip(),
+                            )
+                            st.success("Revisão salva com sucesso!")
+                            import time; time.sleep(1.5)
+                            st.session_state.tela = "fila"
+                            st.session_state.avaliacao_atual = None
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao salvar: {e}")
