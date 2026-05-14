@@ -5,7 +5,6 @@ from google.oauth2 import service_account
 from datetime import datetime
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
-SENHA = "monitora2026"
 PROJECT = "azos-data-analytics"
 DATASET = "operacional"
 TABELA  = f"`{PROJECT}.{DATASET}.monitoraai_avaliacoes`"
@@ -363,6 +362,8 @@ def renderizar_conversa(texto):
 # ─── ESTADO ───────────────────────────────────────────────────────────────────
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
+if "usuario_email" not in st.session_state:
+    st.session_state.usuario_email = ""
 if "tela" not in st.session_state:
     st.session_state.tela = "fila"
 if "avaliacao_atual" not in st.session_state:
@@ -374,6 +375,25 @@ if "reload_fila" not in st.session_state:
 
 
 # ─── TELA LOGIN ───────────────────────────────────────────────────────────────
+def verificar_login(email, senha):
+    """Verifica email e senha contra a lista em secrets.toml"""
+    try:
+        usuarios = dict(st.secrets.get("usuarios", {}))
+        if not usuarios:
+            st.error("Nenhum usuário configurado. Contate o administrador.")
+            return False
+        email = email.strip().lower()
+        senha_correta = usuarios.get(email)
+        if senha_correta is None:
+            return False, "email"
+        if senha != senha_correta:
+            return False, "senha"
+        return True, None
+    except Exception as e:
+        st.error(f"Erro ao verificar credenciais: {e}")
+        return False, "erro"
+
+
 if not st.session_state.autenticado:
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
@@ -381,20 +401,32 @@ if not st.session_state.autenticado:
         st.markdown("""
         <div style="text-align:center; margin-bottom:32px">
             <div style="font-size:40px; margin-bottom:12px">🔍</div>
-            <h1 style="color:#f1f5f9; font-size:24px; font-weight:600; margin:0">MonitoraAI</h1>
+            <h1 style="color:#0f172a; font-size:24px; font-weight:600; margin:0">MonitoraAI</h1>
             <p style="color:#64748b; font-size:13px; margin:6px 0 0">Revisão de avaliações de atendimento</p>
         </div>
         """, unsafe_allow_html=True)
 
         with st.form("login"):
-            senha = st.text_input("Senha de acesso", type="password", placeholder="••••••••••••")
+            email = st.text_input("E-mail", placeholder="seu.email@azos.com.br")
+            senha = st.text_input("Senha", type="password", placeholder="••••••••••••")
             entrar = st.form_submit_button("Entrar", use_container_width=True)
             if entrar:
-                if senha == SENHA:
-                    st.session_state.autenticado = True
-                    st.rerun()
+                if not email.strip():
+                    st.error("Preencha o e-mail.")
+                elif not senha.strip():
+                    st.error("Preencha a senha.")
                 else:
-                    st.error("Senha incorreta. Tente novamente.")
+                    resultado, motivo = verificar_login(email, senha)
+                    if resultado:
+                        st.session_state.autenticado = True
+                        st.session_state.usuario_email = email.strip().lower()
+                        st.rerun()
+                    elif motivo == "email":
+                        st.error("E-mail não autorizado.")
+                    elif motivo == "senha":
+                        st.error("Senha incorreta.")
+                    else:
+                        st.error("Erro ao verificar credenciais.")
     st.stop()
 
 
@@ -535,7 +567,11 @@ elif st.session_state.tela == "revisao":
         </div>
         """, unsafe_allow_html=True)
     with col_salvar:
-        revisado_por = st.text_input("Seu nome", placeholder="Ex: Ana Lima", label_visibility="collapsed", key="revisado_por")
+        st.markdown(f"""
+        <div style="padding:6px 0; font-size:12px; color:#64748b; text-align:right">
+            Revisando como: <strong style="color:#6366f1">{st.session_state.usuario_email}</strong>
+        </div>
+        """, unsafe_allow_html=True)
 
     st.markdown("<hr style='border:none;border-top:1px solid #e2e8f0;margin:8px 0 20px'>", unsafe_allow_html=True)
 
@@ -625,10 +661,10 @@ elif st.session_state.tela == "revisao":
         """, unsafe_allow_html=True)
 
         # Botão salvar
-        nome_revisor = st.session_state.get("revisado_por", "")
+        nome_revisor = st.session_state.get("usuario_email", "")
         if st.button("✓ Salvar revisão", use_container_width=True, key="btn_salvar"):
             if not nome_revisor.strip():
-                st.warning("Preencha seu nome antes de salvar.")
+                st.warning("Sessão expirada. Faça login novamente.")
             else:
                 criterios_sem_justificativa = [
                     c.get("criterio_nome", c.get("nome", f"Critério {i+1}"))
