@@ -190,6 +190,91 @@ def parse_json(s, fallback=None):
         return fallback
 
 
+def normalizar_criterio(c, idx):
+    """
+    Normaliza qualquer schema de critério para o formato padrão interno.
+    Suporta todos os schemas conhecidos e futuros, sem depender de nomes fixos.
+    Formato padrão de saída:
+      { criterio_nome, peso, nota (int 0-3), justificativa }
+    """
+    NOTA_STR_MAP = {"N3": 3, "N2": 2, "N1": 1, "N0": 0, "ELIMINATÓRIO": 0}
+
+    # Nome do critério — tenta todos os campos conhecidos
+    nome = (
+        c.get("criterio_nome")
+        or c.get("nome")
+        or c.get("criterio")
+        or c.get("name")
+        or c.get("criterion")
+        or f"Critério {idx + 1}"
+    )
+
+    # Peso
+    peso = c.get("peso", c.get("weight", c.get("weight_pct", 0)))
+    try:
+        peso = int(peso)
+    except (ValueError, TypeError):
+        peso = 0
+
+    # Nota — tenta todos os formatos conhecidos
+    nota_raw = (
+        c.get("nota")
+        if c.get("nota") is not None
+        else c.get("avaliacao")
+        if c.get("avaliacao") is not None
+        else c.get("score")
+        if c.get("score") is not None
+        else None
+    )
+
+    if nota_raw is not None:
+        if isinstance(nota_raw, str):
+            nota = NOTA_STR_MAP.get(nota_raw, 3)
+        else:
+            try:
+                nota = int(nota_raw)
+            except (ValueError, TypeError):
+                nota = 3
+    elif "atingido" in c:
+        # Schema booleano: atingido=True → N3, False → N0
+        nota = 3 if c["atingido"] else 0
+    elif "fator_nota" in c:
+        # Schema fator_nota: 0=N3, 0.1=N2, 0.5=N1, 1.0=N0
+        try:
+            fator = float(c["fator_nota"])
+            nota = 3 if fator == 0 else (2 if fator <= 0.1 else (1 if fator <= 0.5 else 0))
+        except (ValueError, TypeError):
+            nota = 3
+    elif "deducao" in c:
+        # Schema com dedução direta
+        try:
+            deducao = float(c["deducao"])
+            nota = 3 if deducao == 0 else (2 if deducao <= (peso * 0.1) else (1 if deducao <= (peso * 0.5) else 0))
+        except (ValueError, TypeError):
+            nota = 3
+    else:
+        nota = 3
+
+    nota = max(0, min(3, nota))
+
+    # Justificativa
+    justificativa = (
+        c.get("justificativa")
+        or c.get("observacao")
+        or c.get("justification")
+        or c.get("comment")
+        or ""
+    )
+
+    return {
+        "criterio_nome": nome,
+        "peso": peso,
+        "nota": nota,
+        "justificativa": justificativa,
+        "_original": c,  # preserva o original para debug se necessário
+    }
+
+
 def nota_cor(nota):
     if nota >= 80:
         return "nota-alta"
@@ -200,18 +285,16 @@ def nota_cor(nota):
 
 def calcular_nota(criterios):
     FATOR_MAP = {3: 0, 2: 0.1, 1: 0.5, 0: 1.0}
-    NOTA_STR_MAP = {"N3": 3, "N2": 2, "N1": 1, "N0": 0, "ELIMINATÓRIO": 0}
     total = 0
     for c in criterios:
-        nota_raw = c.get("nota", c.get("avaliacao", 3))
+        # Critérios já normalizados — nota sempre int 0-3
+        nota = c.get("nota", 3)
         peso = c.get("peso", 0)
-        if isinstance(nota_raw, str):
-            nota = NOTA_STR_MAP.get(nota_raw, 3)
-        else:
-            try:
-                nota = int(nota_raw)
-            except (ValueError, TypeError):
-                nota = 3
+        try:
+            nota = int(nota)
+            peso = int(peso)
+        except (ValueError, TypeError):
+            nota, peso = 3, 0
         fator = FATOR_MAP.get(nota, 0)
         total += peso * fator
     return max(0, round(100 - total))
@@ -402,7 +485,7 @@ if st.session_state.tela == "fila":
             st.write("")
             if st.button("Revisar →", key=f"btn_{ticket_id}_{idx}"):
                 st.session_state.avaliacao_atual = row.to_dict()
-                st.session_state.criterios_edit = parse_json(row.get("criterios_json", "[]"), [])
+                st.session_state.criterios_edit = [normalizar_criterio(c, i) for i, c in enumerate(parse_json(row.get("criterios_json", "[]"), []))]
                 st.session_state.tela = "revisao"
                 st.rerun()
 
@@ -478,24 +561,13 @@ elif st.session_state.tela == "revisao":
         """, unsafe_allow_html=True)
 
         NOTAS_LABELS = {0: "N0 — Não atendeu", 1: "N1 — Parcial", 2: "N2 — Quase", 3: "N3 — Atendeu"}
-        NOTA_STR_MAP = {"N3": 3, "N2": 2, "N1": 1, "N0": 0, "ELIMINATÓRIO": 0}
 
         for i, c in enumerate(criterios):
-            nome = c.get("criterio_nome", c.get("nome", f"Critério {i+1}"))
-            peso = c.get("peso", 0)
-
-            # Converte nota para int independente do formato
-            nota_raw = c.get("nota", c.get("avaliacao", 3))
-            if isinstance(nota_raw, str):
-                nota_c = NOTA_STR_MAP.get(nota_raw, 3)
-            else:
-                try:
-                    nota_c = int(nota_raw)
-                except (ValueError, TypeError):
-                    nota_c = 3
-            nota_c = max(0, min(3, nota_c))
-
-            just = c.get("justificativa", "")
+            # Critérios já normalizados ao carregar — acessa diretamente
+            nome   = c.get("criterio_nome", f"Critério {i+1}")
+            peso   = c.get("peso", 0)
+            nota_c = c.get("nota", 3)
+            just   = c.get("justificativa", "")
 
             with st.container():
                 col_nome, col_peso = st.columns([5, 1])
