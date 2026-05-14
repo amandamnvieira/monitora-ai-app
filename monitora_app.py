@@ -388,34 +388,25 @@ if st.session_state.tela == "fila":
             st.markdown(f"""
             <div style="text-align:center; padding:12px 0">
                 <div class="nota-display {cor_classe}">{nota}</div>
-                <div style="font-size:10px; color:#475569; margin-top:2px">nota IA</div>
+                <div style="font-size:10px; color:#94a3b8; margin-top:2px">nota IA</div>
             </div>
             """, unsafe_allow_html=True)
         with col_info:
-            st.markdown(f"""
-            <div style="padding:14px 0">
-                <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap">
-                    <span style="font-family:'DM Mono',monospace; font-size:13px; color:#94a3b8">#{ticket_id}</span>
-                    <span style="background:{tag_cor(tag)}22; color:{tag_cor(tag)}; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:500">{tag.replace("_"," ")}</span>
-                    <span style="font-size:12px; color:#64748b">{motivo_label(motivo)}</span>
-                    {exp_badge}
-                </div>
-                <div style="font-size:12px; color:#64748b">
-                    Agente: <span style="color:#6366f1; font-family:'DM Mono',monospace">{agente}</span>
-                    &nbsp;&nbsp;·&nbsp;&nbsp;Abertura: {ts}
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            badges = f'''<span style="font-family:\'DM Mono\',monospace; font-size:13px; color:#64748b">#{ticket_id}</span>
+                &nbsp;<span style="background:{tag_cor(tag)}18; color:{tag_cor(tag)}; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:500; border:1px solid {tag_cor(tag)}44">{tag.replace("_"," ")}</span>
+                &nbsp;<span style="font-size:12px; color:#64748b">{motivo_label(motivo)}</span>
+                {("&nbsp;" + exp_badge) if exp_badge else ""}'''
+            st.markdown(badges, unsafe_allow_html=True)
+            st.caption(f"Agente: {agente}   ·   Abertura: {ts}")
         with col_btn:
-            st.markdown("<div style='padding-top:14px'>", unsafe_allow_html=True)
+            st.write("")
             if st.button("Revisar →", key=f"btn_{ticket_id}_{idx}"):
                 st.session_state.avaliacao_atual = row.to_dict()
                 st.session_state.criterios_edit = parse_json(row.get("criterios_json", "[]"), [])
                 st.session_state.tela = "revisao"
                 st.rerun()
-            st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown("<hr style='border:none;border-top:1px solid #e2e8f0;margin:4px 0'>", unsafe_allow_html=True)
+        st.divider()
 
 
 # ─── TELA REVISÃO ─────────────────────────────────────────────────────────────
