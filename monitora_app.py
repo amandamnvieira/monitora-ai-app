@@ -478,40 +478,51 @@ elif st.session_state.tela == "revisao":
         """, unsafe_allow_html=True)
 
         NOTAS_LABELS = {0: "N0 — Não atendeu", 1: "N1 — Parcial", 2: "N2 — Quase", 3: "N3 — Atendeu"}
+        NOTA_STR_MAP = {"N3": 3, "N2": 2, "N1": 1, "N0": 0, "ELIMINATÓRIO": 0}
 
         for i, c in enumerate(criterios):
-            nome    = c.get("criterio_nome", c.get("nome", f"Critério {i+1}"))
-            peso    = c.get("peso", 0)
-            nota_c  = int(c.get("nota", c.get("avaliacao", "3") if c.get("avaliacao", "3") not in ["N0","N1","N2","N3","ELIMINATÓRIO"] else {"N0":0,"N1":1,"N2":2,"N3":3,"ELIMINATÓRIO":0}.get(c.get("avaliacao","3"), 3)))
-            just    = c.get("justificativa", "")
+            nome = c.get("criterio_nome", c.get("nome", f"Critério {i+1}"))
+            peso = c.get("peso", 0)
 
-            st.markdown(f"""
-            <div class="criterio-card">
-                <div style="display:flex; justify-content:space-between; margin-bottom:10px">
-                    <span style="font-size:13px; font-weight:500; color:#e2e8f0">{nome}</span>
-                    <span style="font-size:11px; color:#475569">peso {peso}</span>
-                </div>
-            """, unsafe_allow_html=True)
+            # Converte nota para int independente do formato
+            nota_raw = c.get("nota", c.get("avaliacao", 3))
+            if isinstance(nota_raw, str):
+                nota_c = NOTA_STR_MAP.get(nota_raw, 3)
+            else:
+                try:
+                    nota_c = int(nota_raw)
+                except (ValueError, TypeError):
+                    nota_c = 3
+            nota_c = max(0, min(3, nota_c))
 
-            nova_nota = st.select_slider(
-                f"nota_{i}",
-                options=[0, 1, 2, 3],
-                value=nota_c,
-                format_func=lambda n: NOTAS_LABELS[n],
-                label_visibility="collapsed",
-                key=f"slider_{ticket_id}_{i}",
-            )
+            just = c.get("justificativa", "")
 
-            nova_just = st.text_area(
-                f"just_{i}",
-                value=just,
-                placeholder="Justificativa...",
-                label_visibility="collapsed",
-                key=f"just_{ticket_id}_{i}",
-                height=68,
-            )
+            with st.container():
+                col_nome, col_peso = st.columns([5, 1])
+                with col_nome:
+                    st.markdown(f"**{nome}**")
+                with col_peso:
+                    st.caption(f"peso {peso}")
 
-            st.markdown("</div>", unsafe_allow_html=True)
+                nova_nota = st.select_slider(
+                    f"nota_{i}",
+                    options=[0, 1, 2, 3],
+                    value=nota_c,
+                    format_func=lambda n: NOTAS_LABELS[n],
+                    label_visibility="collapsed",
+                    key=f"slider_{ticket_id}_{i}",
+                )
+
+                nova_just = st.text_area(
+                    f"just_{i}",
+                    value=just,
+                    placeholder="Justificativa...",
+                    label_visibility="collapsed",
+                    key=f"just_{ticket_id}_{i}",
+                    height=68,
+                )
+
+                st.divider()
 
             # Atualiza criterios em session_state
             criterios[i]["nota"] = nova_nota
